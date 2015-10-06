@@ -1,10 +1,4 @@
---------------------
-MODX-SMF
---------------------
-Author: Vasiliy Naumkin <bezumkin@yandex.ru>
---------------------
-
-### MODX + SMF two-way synchronization:
+### [MODX][1] + [SMF][2] two-way synchronization:
 
 - Login and logout.
 - Create users.
@@ -38,9 +32,8 @@ See description of SMF system settings in MODX manager.
 
 ---
 
-Feel free to suggest ideas/improvements/bugs on GitHub:
-http://github.com/username/MODX-SMF/issues
-
----
-
 sottwell supported the development of this package
+
+
+[1]: https://modx.com
+[2]: http://www.simplemachines.org

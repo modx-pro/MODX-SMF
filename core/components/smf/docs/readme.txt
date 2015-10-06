@@ -39,7 +39,7 @@ See description of SMF system settings in MODX manager.
 ---
 
 Feel free to suggest ideas/improvements/bugs on GitHub:
-http://github.com/username/MODX-SMF/issues
+https://github.com/bezumkin/MODX-SMF/issues
 
 ---
 
