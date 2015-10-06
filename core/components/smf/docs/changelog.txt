@@ -1,0 +1,5 @@
+Changelog for MODX-SMF.
+
+1.0.0-beta
+==============
+- Initial version, see readme.
