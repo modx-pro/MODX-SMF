@@ -2,6 +2,7 @@ Changelog for MODX-SMF.
 
 1.0.0-rc
 ==============
+- Removed system setting "smf_forced_sync".
 - More detailed error log when received empty username for create.
 - Added public functions for adding and removing SMF integration hooks.
 - SMF hooks are removed on package uninstall.

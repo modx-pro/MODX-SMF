@@ -209,12 +209,6 @@ class MODX_SMF {
 			$this->addUserToSMF($user->username);
 		}
 		else {
-			if (!$this->modx->getOption('smf_forced_sync')) {
-				$this->modx->log(modX::LOG_LEVEL_ERROR, "[SMF] Could not update existing SMF user \"{$username}\" because of \"smf_forced_sync\" is disabled");
-
-				return;
-			}
-
 			$update = array(
 				'member_name' => 'username',
 				'email_address' => 'email',
@@ -228,6 +222,13 @@ class MODX_SMF {
 
 			// New MODX user
 			if (empty($this->_user)) {
+				/*
+				if (!$this->modx->getOption('smf_forced_sync')) {
+					$this->modx->log(modX::LOG_LEVEL_ERROR, "[SMF] Could not update existing SMF user \"{$username}\" because of \"smf_forced_sync\" is disabled");
+
+					return;
+				}
+				*/
 				$new = array_merge($user->toArray(), $profile->toArray());
 				foreach ($update as $k => $v) {
 					if (!empty($new[$v])) {
@@ -575,12 +576,13 @@ class MODX_SMF {
 
 			/** @var modUser $user */
 			if ($user = $modx->getObject('modUser', array('username' => $username))) {
+				/*
 				if (!$modx->getOption('smf_forced_sync')) {
 					$modx->log(modX::LOG_LEVEL_ERROR, "[SMF] Could not update existing MODX user \"{$username}\" because of \"smf_forced_sync\" is disabled");
 
 					return;
 				}
-
+				*/
 				$response = $MODX_SMF->runProcessor('security/user/update', array(
 					'id' => $user->id,
 					'username' => $username,
