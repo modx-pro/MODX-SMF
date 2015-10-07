@@ -14,6 +14,10 @@ if ($object->xpdo) {
 				$modx->config['smf_path'] = $setting->get('value');
 			}
 
+			if ($setting = $modx->getObject('modSystemSetting', 'smf_forced_sync')) {
+				$setting->remove();
+			}
+
 			// Initialize SMF
 			$MODX_SMF = $modx->getService('modx_smf', 'MODX_SMF', MODX_CORE_PATH . 'components/smf/model/');
 			break;

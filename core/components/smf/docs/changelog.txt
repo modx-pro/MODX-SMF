@@ -1,5 +1,10 @@
 Changelog for MODX-SMF.
 
+1.0.0-rc
+==============
+- More detailed error log when received empty username for create.
+- Removed system setting "smf_forced_sync".
+
 1.0.0-beta
 ==============
 - Initial version, see readme.

@@ -58,15 +58,16 @@ class MODX_SMF {
 	 * @return null|object
 	 */
 	public function addUserToMODX($username) {
-		if (!$this->modx->getOption('smf_forced_sync')) {
-			$this->modx->log(modX::LOG_LEVEL_ERROR, "[SMF] Could not add user \"{$username}\" to MODX because another one is existing and \"smf_forced_sync\" is disabled.");
+		if (empty($username)) {
+			$this->modx->log(modX::LOG_LEVEL_ERROR, "[SMF] Could not add new user to MODX: empty username");
+			$this->logCallTrace();
 
 			return null;
 		}
 
 		if ($data = smfapi_getUserByUsername($username)) {
 			$create = array(
-				'username' => $data['member_name'],
+				'username' => $username,
 				'password' => sha1(rand() + time()),
 				'fullname' => @$data['real_name'],
 				'email' => @$data['email_address'],
@@ -79,9 +80,9 @@ class MODX_SMF {
 			/** @var modProcessorResponse $response */
 			$response = $this->runProcessor('security/user/create', $create);
 			if ($response->isError()) {
-				$this->modx->log(modX::LOG_LEVEL_ERROR, "[SMF] Could not add missing user \"{$username}\" to MODX: " . print_r($response->getAllErrors(), true));
+				$this->modx->log(modX::LOG_LEVEL_ERROR, "[SMF] Could not add new user \"{$username}\" to MODX: " . print_r($response->getAllErrors(), true));
 			}
-			elseif ($user = $this->modx->getObject('modUser', array('username' => $data['username']))) {
+			elseif ($user = $this->modx->getObject('modUser', array('username' => $username))) {
 				return $user;
 			}
 		}
@@ -96,13 +97,13 @@ class MODX_SMF {
 	 * @return int|bool
 	 */
 	public function addUserToSMF($username) {
-		/*
-		if (smfapi_getUserByUsername($username) && !$this->modx->getOption('smf_forced_sync')) {
-			$this->modx->log(modX::LOG_LEVEL_ERROR, "[SMF] Could not add user \"{$username}\" to SMF because another one is existing and \"smf_forced_sync\" is disabled.");
+		if (empty($username)) {
+			$this->modx->log(modX::LOG_LEVEL_ERROR, "[SMF] Could not add new user to SMF: empty username");
+			$this->logCallTrace();
 
-			return false;
+			return null;
 		}
-		*/
+
 		$password = !empty($_REQUEST['specifiedpassword']) && !empty($_REQUEST['confirmpassword']) && $_REQUEST['specifiedpassword'] == $_REQUEST['confirmpassword']
 			? $_REQUEST['specifiedpassword']
 			: '';
@@ -138,7 +139,7 @@ class MODX_SMF {
 				return $response;
 			}
 			elseif (is_array($response)) {
-				$this->modx->log(modX::LOG_LEVEL_ERROR, "[SMF] Could not add missing user \"{$username}\" {$this->modx->event->name} to SMF: " . print_r($response, true));
+				$this->modx->log(modX::LOG_LEVEL_ERROR, "[SMF] Could not add new user \"{$username}\" {$this->modx->event->name} to SMF: " . print_r($response, true));
 			}
 		}
 
@@ -190,10 +191,7 @@ class MODX_SMF {
 		if (!smfapi_getUserByUsername($username)) {
 			$this->addUserToSMF($user->username);
 		}
-		elseif ($this->_user) {
-			$current = array_merge($this->_user->toArray(), $this->_profile->toArray());
-			$new = array_merge($user->toArray(), $profile->toArray());
-
+		else {
 			$update = array(
 				'member_name' => 'username',
 				'email_address' => 'email',
@@ -204,38 +202,71 @@ class MODX_SMF {
 				'location' => 'city',
 				'gender' => 'gender',
 			);
-			foreach ($update as $k => $v) {
-				if ($new[$v] != $current[$v]) {
-					if ($k == 'birthdate') {
-						$update[$k] = date('Y-m-d', $new[$v]);
+
+			// New MODX user
+			if (empty($this->_user)) {
+				/*
+				if (!$this->modx->getOption('smf_forced_sync')) {
+					$this->modx->log(modX::LOG_LEVEL_ERROR, "[SMF] Could not update existing SMF user \"{$username}\" because of \"smf_forced_sync\" is disabled");
+
+					return;
+				}
+				*/
+				$new = array_merge($user->toArray(), $profile->toArray());
+				foreach ($update as $k => $v) {
+					if (!empty($new[$v])) {
+						if ($k == 'birthdate') {
+							$update[$k] = date('Y-m-d', $new[$v]);
+						}
+						else {
+							$update[$k] = $new[$v];
+						}
 					}
 					else {
-						$update[$k] = $new[$v];
+						unset($update[$k]);
 					}
 				}
-				else {
-					unset($update[$k]);
-				}
-			}
-
-			if (!empty($password)) {
-				$update['passwd'] = sha1(strtolower($user->username) . smfapi_unHtmlspecialchars($password));
-			}
-			if ($this->_user->active != $user->active || $this->_profile->blocked != $profile->blocked) {
 				$update['is_activated'] = $user->active && !$profile->blocked
 					? 1
 					: 3;
 			}
+			// Existing MODX user
+			else {
+				$current = array_merge($this->_user->toArray(), $this->_profile->toArray());
+				$new = array_merge($user->toArray(), $profile->toArray());
+				foreach ($update as $k => $v) {
+					if ($new[$v] != $current[$v]) {
+						if ($k == 'birthdate') {
+							$update[$k] = date('Y-m-d', $new[$v]);
+						}
+						else {
+							$update[$k] = $new[$v];
+						}
+					}
+					else {
+						unset($update[$k]);
+					}
+				}
+				if ($this->_user->active != $user->active || $this->_profile->blocked != $profile->blocked) {
+					$update['is_activated'] = $user->active && !$profile->blocked
+						? 1
+						: 3;
+				}
+			}
+
+			if (!empty($password)) {
+				$update['passwd'] = sha1(strtolower($username) . smfapi_unHtmlspecialchars($password));
+			}
 
 			if (!empty($update)) {
-				$response = smfapi_updateMemberData($this->_user->username, $update);
+				$response = smfapi_updateMemberData($username, $update);
 				if (is_array($response)) {
 					$this->modx->log(modX::LOG_LEVEL_ERROR, "[SMF] Could not update user \"{$username}\" {$this->modx->event->name} in SMF: " . print_r($response, true));
 				}
 				elseif (!empty($update['passwd'])) {
 					$contexts = $this->smfGetContexts();
 					if (in_array($this->modx->context->key, $contexts) && $this->modx->user->username == $user->username) {
-						smfapi_logout($this->_user->username);
+						smfapi_logout($username);
 						smfapi_login($user->username);
 					}
 				}
@@ -349,6 +380,7 @@ class MODX_SMF {
 		}
 		else {
 			file_put_contents($this->config['controllersPath'] . 'smfapi_settings.txt', base64_encode($settings));
+			/** @noinspection PhpIncludeInspection */
 			require_once $api;
 		}
 
@@ -359,7 +391,9 @@ class MODX_SMF {
 		if (empty($modSettings['integrate_pre_include']) || $modSettings['integrate_pre_include'] != $controller) {
 			if (!empty($modSettings['integrate_pre_include'])) {
 				if (!function_exists('add_integration_function')) {
+					/** @noinspection PhpIncludeInspection */
 					require $smf_base . 'Sources/Subs.php';
+					/** @noinspection PhpIncludeInspection */
 					require $smf_base . 'Sources/Load.php';
 				}
 				$tmp = array_map('trim', explode(',', $modSettings['integrate_pre_include']));
@@ -557,11 +591,13 @@ class MODX_SMF {
 
 			/** @var modUser $user */
 			if ($user = $modx->getObject('modUser', array('username' => $username))) {
+				/*
 				if (!$modx->getOption('smf_forced_sync')) {
-					// We can`t overwrite existing user
+					$modx->log(modX::LOG_LEVEL_ERROR, "[SMF] Could not update existing MODX user \"{$username}\" because of \"smf_forced_sync\" is disabled");
+
 					return;
 				}
-
+				*/
 				$response = $MODX_SMF->runProcessor('security/user/update', array(
 					'id' => $user->id,
 					'username' => $username,
@@ -682,6 +718,27 @@ class MODX_SMF {
 				}
 			}
 		}
+	}
+
+
+	/**
+	 * @return string
+	 */
+	public function logCallTrace() {
+		$e = new Exception();
+		$trace = explode("\n", $e->getTraceAsString());
+
+		$trace = array_reverse($trace);
+		array_shift($trace);
+		array_pop($trace);
+		$length = count($trace);
+		$result = array();
+
+		for ($i = 0; $i < $length; $i++) {
+			$result[] = str_replace(MODX_BASE_PATH, '/', $i + 1 . '.' . substr($trace[$i], strpos($trace[$i], ' ')));
+		}
+
+		$this->modx->log(modX::LOG_LEVEL_ERROR, "\n" . implode("\n", $result));
 	}
 
 }
