@@ -277,6 +277,7 @@ $builder->setPackageAttributes(array(
 	'setup-options' => array(
 		'source' => $sources['build'] . 'setup.options.php',
 	),
+	'resolve_files_remove' => false,
 ));
 $modx->log(modX::LOG_LEVEL_INFO, 'Added package attributes and setup options.');
 

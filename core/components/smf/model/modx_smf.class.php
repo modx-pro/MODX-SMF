@@ -6,6 +6,16 @@
 class MODX_SMF {
 	/** @var modX $modx */
 	public $modx;
+	/** @var array $smfHooks */
+	protected $_smfHooks = array(
+		'integrate_login' => 'MODX_SMF::smfOnUserLogin',
+		'integrate_logout' => 'MODX_SMF::smfOnUserLogout',
+		'integrate_reset_pass' => 'MODX_SMF::smfOnUserResetPass',
+		'integrate_activate' => 'MODX_SMF::smfOnUserActivate',
+		'integrate_change_member_data' => 'MODX_SMF::smfOnUserUpdate',
+		'integrate_register' => 'MODX_SMF::smfOnUserRegister',
+		'integrate_delete_member' => 'MODX_SMF::smfOnUserDelete',
+	);
 	/** @var modUser $_user */
 	private $_user = null;
 	/** @var modUserProfile $_profile */
@@ -21,12 +31,19 @@ class MODX_SMF {
 
 		$corePath = $this->modx->getOption('smf_core_path', $config, $this->modx->getOption('core_path') . 'components/smf/');
 		//$assetsUrl = $this->modx->getOption('smf_assets_url', $config, $this->modx->getOption('assets_url') . 'components/smf/');
+		$smfPath = $this->modx->getOption('smf_path', $this->modx->config, '{base_path}forum/', true);
+		$smfPath = str_replace('{base_path}', MODX_BASE_PATH, rtrim(trim($smfPath), '/')) . '/';
+		$smfPath = preg_replace('#/+#', '/', $smfPath);
+		if ($smfPath[0] != '/') {
+			$smfPath = MODX_BASE_PATH . $smfPath;
+		}
 
 		$this->config = array_merge(array(
 			'corePath' => $corePath,
 			'modelPath' => $corePath . 'model/',
 			'processorsPath' => $corePath . 'processors/',
 			'controllersPath' => $corePath . 'controllers/',
+			'smfPath' => $smfPath,
 		), $config);
 
 		$this->modx->lexicon->load('smf:default');
@@ -362,14 +379,7 @@ class MODX_SMF {
 			return;
 		}
 
-		$smf_base = $this->modx->getOption('smf_path', $this->modx->config, '{base_path}forum/', true);
-		$smf_base = str_replace('{base_path}', MODX_BASE_PATH, rtrim(trim($smf_base), '/')) . '/';
-		$smf_base = preg_replace('#/+#', '/', $smf_base);
-		if ($smf_base[0] != '/') {
-			$smf_base = MODX_BASE_PATH . $smf_base;
-		}
-
-		$settings = $smf_base . 'Settings.php';
+		$settings = $this->config['smfPath'] . 'Settings.php';
 		$api = $this->config['controllersPath'] . 'smf-api.php';
 
 		if (!file_exists($settings)) {
@@ -383,32 +393,7 @@ class MODX_SMF {
 			require_once $api;
 		}
 
-		// Add MODX controller to SMF
-		$controller = $this->config['corePath'] . 'controllers/smf-include.php';
-
-		/**@var array $modSettings */
-		if (empty($modSettings['integrate_pre_include']) || $modSettings['integrate_pre_include'] != $controller) {
-			if (!empty($modSettings['integrate_pre_include'])) {
-				if (!function_exists('add_integration_function')) {
-					/** @noinspection PhpIncludeInspection */
-					require $smf_base . 'Sources/Subs.php';
-					/** @noinspection PhpIncludeInspection */
-					require $smf_base . 'Sources/Load.php';
-				}
-				$tmp = array_map('trim', explode(',', $modSettings['integrate_pre_include']));
-				foreach ($tmp as $v) {
-					remove_integration_function('integrate_pre_include', $v);
-				}
-				add_integration_function('integrate_pre_include', $controller);
-				add_integration_function('integrate_login', 'MODX_SMF::smfOnUserLogin');
-				add_integration_function('integrate_logout', 'MODX_SMF::smfOnUserLogout');
-				add_integration_function('integrate_reset_pass', 'MODX_SMF::smfOnUserResetPass');
-				add_integration_function('integrate_activate', 'MODX_SMF::smfOnUserActivate');
-				add_integration_function('integrate_change_member_data', 'MODX_SMF::smfOnUserUpdate');
-				add_integration_function('integrate_register', 'MODX_SMF::smfOnUserRegister');
-				add_integration_function('integrate_delete_member', 'MODX_SMF::smfOnUserDelete');
-			}
-		}
+		$this->smfAddHooks();
 	}
 
 
@@ -737,6 +722,68 @@ class MODX_SMF {
 		}
 
 		$this->modx->log(modX::LOG_LEVEL_ERROR, "\n" . implode("\n", $result));
+	}
+
+
+	/**
+	 * * Add integration functions to SMF
+	 */
+	public function smfAddHooks() {
+		global $modSettings;
+
+		$controller = $this->config['corePath'] . 'controllers/smf-include.php';
+
+		/**@var array $modSettings */
+		if (empty($modSettings['integrate_pre_include']) || $modSettings['integrate_pre_include'] != $controller) {
+			if (!function_exists('add_integration_function')) {
+				$smfPath = $this->config['smfPath'];
+				/** @noinspection PhpIncludeInspection */
+				require $smfPath . 'Sources/Subs.php';
+				/** @noinspection PhpIncludeInspection */
+				require $smfPath . 'Sources/Load.php';
+			}
+
+			$hooks = $this->_smfHooks;
+			$hooks['integrate_pre_include'] = $controller;
+
+			foreach ($hooks as $hook => $value) {
+				if (!empty($modSettings[$hook])) {
+					$tmp = explode(',', $modSettings[$hook]);
+					foreach ($tmp as $v) {
+						remove_integration_function($hook, $v);
+					}
+				}
+				add_integration_function($hook, $value);
+			}
+		}
+	}
+
+
+	/**
+	 * Remove integration functions from to SMF
+	 */
+	public function smfRemoveHooks() {
+		global $modSettings;
+
+		if (!function_exists('add_integration_function')) {
+			$smfPath = $this->config['smfPath'];
+			/** @noinspection PhpIncludeInspection */
+			require $smfPath . 'Sources/Subs.php';
+			/** @noinspection PhpIncludeInspection */
+			require $smfPath . 'Sources/Load.php';
+		}
+
+		$hooks = $this->_smfHooks;
+		$hooks['integrate_pre_include'] = '';
+
+		foreach ($hooks as $hook => $value) {
+			if (!empty($modSettings[$hook])) {
+				$tmp = explode(',', $modSettings[$hook]);
+				foreach ($tmp as $v) {
+					remove_integration_function($hook, $v);
+				}
+			}
+		}
 	}
 
 }
