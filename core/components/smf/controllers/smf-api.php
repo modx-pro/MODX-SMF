@@ -1793,21 +1793,27 @@ function smfapi_reloadSettings()
 	$space_chars = $utf8 ? (@version_compare(PHP_VERSION, '4.3.3') != -1 ? '\x{A0}\x{AD}\x{2000}-\x{200F}\x{201F}\x{202F}\x{3000}\x{FEFF}' : "\xC2\xA0\xC2\xAD\xE2\x80\x80-\xE2\x80\x8F\xE2\x80\x9F\xE2\x80\xAF\xE2\x80\x9F\xE3\x80\x80\xEF\xBB\xBF") : '\x00-\x08\x0B\x0C\x0E-\x19\xA0';
 
 	$smcFunc += array(
-		'entity_fix' => create_function('$string', '
-			$num = substr($string, 0, 1) === \'x\' ? hexdec(substr($string, 1)) : (int) $string;
-			return $num < 0x20 || $num > 0x10FFFF || ($num >= 0xD800 && $num <= 0xDFFF) || $num == 0x202E ? \'\' : \'&#\' . $num . \';\';'),
-		'htmlspecialchars' => create_function('$string, $quote_style = ENT_COMPAT, $charset = \'ISO-8859-1\'', '
+		'entity_fix' => function($string) use($num) {
+			$num = substr($string, 0, 1) === 'x' ? hexdec(substr($string, 1)) : (int) $string;
+			return $num < 0x20 || $num > 0x10FFFF || ($num >= 0xD800 && $num <= 0xDFFF) || $num == 0x202E ? '' : '&#' . $num . ';';
+			},
+		'htmlspecialchars' => function($string) {
+			$quote_style = ENT_COMPAT; $charset = 'ISO-8859-1';
 			global $smcFunc;
-			return ' . strtr($ent_check[0], array('&' => '&amp;')) . 'htmlspecialchars($string, $quote_style, ' . ($utf8 ? '\'UTF-8\'' : '$charset') . ')' . $ent_check[1] . ';'),
-		'htmltrim' => create_function('$string', '
+			return strtr($ent_check[0], array('&' => '&amp;')) . htmlspecialchars($string, $quote_style, ($utf8 ? 'UTF-8' : $charset)) . $ent_check[1];
+			},
+		'htmltrim' => function($string) {
 			global $smcFunc;
-			return preg_replace(\'~^(?:[ \t\n\r\x0B\x00' . $space_chars . ']|&nbsp;)+|(?:[ \t\n\r\x0B\x00' . $space_chars . ']|&nbsp;)+$~' . ($utf8 ? 'u' : '') . '\', \'\', ' . implode('$string', $ent_check) . ');'),
-		'strlen' => create_function('$string', '
+			return preg_replace('~^(?:[ \t\n\r\x0B\x00' . $space_chars . ']|&nbsp;)+|(?:[ \t\n\r\x0B\x00' . $space_chars . ']|&nbsp;)+$~' . ($utf8 ? 'u' : '') . '', '', implode('$string', $ent_check));
+			},
+		'strlen' => function($string) {
 			global $smcFunc;
-			return strlen(preg_replace(\'~' . $ent_list . ($utf8 ? '|.~u' : '~') . '\', \'_\', ' . implode('$string', $ent_check) . '));'),
-		'strpos' => create_function('$haystack, $needle, $offset = 0', '
+			return strlen(preg_replace('~' . $ent_list . ($utf8 ? '|.~u' : '~') . '', '_', implode('$string', $ent_check)));
+			},
+		'strpos' => function($haystack) use($needle) {
+			$offset = 0;
 			global $smcFunc;
-			$haystack_arr = preg_split(\'~(&#' . (empty($modSettings['disableEntityCheck']) ? '\d{1,7}' : '021') . ';|&quot;|&amp;|&lt;|&gt;|&nbsp;|.)~' . ($utf8 ? 'u' : '') . '\', ' . implode('$haystack', $ent_check) . ', -1, PREG_SPLIT_DELIM_CAPTURE | PREG_SPLIT_NO_EMPTY);
+			$haystack_arr = preg_split('~(&#' . (empty($modSettings['disableEntityCheck']) ? '\d{1,7}' : '021') . ';|&quot;|&amp;|&lt;|&gt;|&nbsp;|.)~' . ($utf8 ? 'u' : '') . '', implode('$haystack', $ent_check), -1, PREG_SPLIT_DELIM_CAPTURE | PREG_SPLIT_NO_EMPTY);
 			$haystack_size = count($haystack_arr);
 			if (strlen($needle) === 1)
 			{
@@ -1816,7 +1822,7 @@ function smfapi_reloadSettings()
 			}
 			else
 			{
-				$needle_arr = preg_split(\'~(&#' . (empty($modSettings['disableEntityCheck']) ? '\d{1,7}' : '021') . ';|&quot;|&amp;|&lt;|&gt;|&nbsp;|.)~' . ($utf8 ? 'u' : '') . '\',  ' . implode('$needle', $ent_check) . ', -1, PREG_SPLIT_DELIM_CAPTURE | PREG_SPLIT_NO_EMPTY);
+				$needle_arr = preg_split('~(&#' . (empty($modSettings['disableEntityCheck']) ? '\d{1,7}' : '021') . ';|&quot;|&amp;|&lt;|&gt;|&nbsp;|.)~' . ($utf8 ? 'u' : '') . '',  implode('$needle', $ent_check), -1, PREG_SPLIT_DELIM_CAPTURE | PREG_SPLIT_NO_EMPTY);
 				$needle_size = count($needle_arr);
 
 				$result = array_search($needle_arr[0], array_slice($haystack_arr, $offset));
@@ -1828,38 +1834,49 @@ function smfapi_reloadSettings()
 					$result = array_search($needle_arr[0], array_slice($haystack_arr, ++$offset));
 				}
 				return false;
-			}'),
-		'substr' => create_function('$string, $start, $length = null', '
+			}
+			},
+		'substr' => function($string) use($start) {
+			$length = null;
 			global $smcFunc;
-			$ent_arr = preg_split(\'~(&#' . (empty($modSettings['disableEntityCheck']) ? '\d{1,7}' : '021') . ';|&quot;|&amp;|&lt;|&gt;|&nbsp;|.)~' . ($utf8 ? 'u' : '') . '\', ' . implode('$string', $ent_check) . ', -1, PREG_SPLIT_DELIM_CAPTURE | PREG_SPLIT_NO_EMPTY);
-			return $length === null ? implode(\'\', array_slice($ent_arr, $start)) : implode(\'\', array_slice($ent_arr, $start, $length));'),
-		'strtolower' => $utf8 ? (function_exists('mb_strtolower') ? create_function('$string', '
-			return mb_strtolower($string, \'UTF-8\');') : create_function('$string', '
-			global $sourcedir;
-			require_once($sourcedir . \'/Subs-Charset.php\');
-			return utf8_strtolower($string);')) : 'strtolower',
-		'strtoupper' => $utf8 ? (function_exists('mb_strtoupper') ? create_function('$string', '
-			return mb_strtoupper($string, \'UTF-8\');') : create_function('$string', '
-			global $sourcedir;
-			require_once($sourcedir . \'/Subs-Charset.php\');
-			return utf8_strtoupper($string);')) : 'strtoupper',
-		'truncate' => create_function('$string, $length', (empty($modSettings['disableEntityCheck']) ? '
+			$ent_arr = preg_split('~(&#' . (empty($modSettings['disableEntityCheck']) ? '\d{1,7}' : '021') . ';|&quot;|&amp;|&lt;|&gt;|&nbsp;|.)~' . ($utf8 ? 'u' : '') . '', implode('$string', $ent_check), -1, PREG_SPLIT_DELIM_CAPTURE | PREG_SPLIT_NO_EMPTY);
+			return $length === null ? implode('', array_slice($ent_arr, $start)) : implode('', array_slice($ent_arr, $start, $length));
+			},
+		'strtolower' => $utf8 ? (function_exists('mb_strtolower') ? 
+			function($string) { return mb_strtolower($string, 'UTF-8'); } : 
+			function($string) {
+			    global $sourcedir;
+			    require_once($sourcedir . '/Subs-Charset.php');
+			    return utf8_strtolower($string);
+			}
+			) : 'strtolower',
+		'strtoupper' => $utf8 ? (function_exists('mb_strtoupper') ? 
+			function($string) { return mb_strtoupper($string, 'UTF-8'); } : 
+			function($string) {
+			    global $sourcedir;
+			    require_once($sourcedir . '/Subs-Charset.php');
+			    return utf8_strtoupper($string);
+			}) : 'strtoupper',
+		'truncate' => function($string) use($length) {
 			global $smcFunc;
-			$string = ' . implode('$string', $ent_check) . ';' : '') . '
-			preg_match(\'~^(' . $ent_list . '|.){\' . $smcFunc[\'strlen\'](substr($string, 0, $length)) . \'}~'.  ($utf8 ? 'u' : '') . '\', $string, $matches);
+			empty($modSettings['disableEntityCheck']) ? $string = implode('$string', $ent_check) : '';
+			preg_match('~^(' . $ent_list . '|.){' . $smcFunc['strlen'](substr($string, 0, $length)) . '}~'.  ($utf8 ? 'u' : '') . '', $string, $matches);
 			$string = $matches[0];
 			while (strlen($string) > $length)
-				$string = preg_replace(\'~(?:' . $ent_list . '|.)$~'.  ($utf8 ? 'u' : '') . '\', \'\', $string);
-			return $string;'),
-		'ucfirst' => $utf8 ? create_function('$string', '
+				$string = preg_replace('~(?:' . $ent_list . '|.)$~'.  ($utf8 ? 'u' : '') . '', '', $string);
+			return $string;
+			},
+		'ucfirst' => $utf8 ? function($string) {
 			global $smcFunc;
-			return $smcFunc[\'strtoupper\']($smcFunc[\'substr\']($string, 0, 1)) . $smcFunc[\'substr\']($string, 1);') : 'ucfirst',
-		'ucwords' => $utf8 ? create_function('$string', '
+			return $smcFunc['strtoupper']($smcFunc['substr']($string, 0, 1)) . $smcFunc['substr']($string, 1);
+			} : 'ucfirst',
+		'ucwords' => $utf8 ? function($string) {
 			global $smcFunc;
-			$words = preg_split(\'~([\s\r\n\t]+)~\', $string, -1, PREG_SPLIT_DELIM_CAPTURE);
+			$words = preg_split('~([\s\r\n\t]+)~', $string, -1, PREG_SPLIT_DELIM_CAPTURE);
 			for ($i = 0, $n = count($words); $i < $n; $i += 2)
-				$words[$i] = $smcFunc[\'ucfirst\']($words[$i]);
-			return implode(\'\', $words);') : 'ucwords',
+				$words[$i] = $smcFunc['ucfirst']($words[$i]);
+			return implode('', $words);
+			} : 'ucwords'
 	);
 
 	// setting the timezone is a requirement for some functions in PHP >= 5.1.
@@ -1888,6 +1905,7 @@ function smfapi_loadUserSettings()
 	global $cookiename, $user_info, $language;
 	
 	$id_member = 0;
+	$cookieData = '';
 
     if (0 == $id_member && isset($_COOKIE[$cookiename])) {
         $cookieData = stripslashes($_COOKIE[$cookiename]);

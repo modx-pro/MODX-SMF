@@ -1,5 +1,9 @@
 Changelog for MODX-SMF.
 
+1.0.0-rc2
+==============
+- Updated to support PHP8 (replaced create_function() with anonymous function call)
+
 1.0.0-rc
 ==============
 - Removed system setting "smf_forced_sync".
