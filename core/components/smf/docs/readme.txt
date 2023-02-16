@@ -2,6 +2,7 @@
 MODX-SMF
 --------------------
 Author: Vasiliy Naumkin <bezumkin@yandex.ru>
+Contributor: jazzl0ver
 --------------------
 
 ### MODX + SMF two-way synchronization:
